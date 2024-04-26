@@ -1,9 +1,10 @@
 {
-  "name": "karin-plugin-template",
+  "name": "karin-plugin-MakeLove",
   "version": "0.0.1",
-  "author": "Lain",
+  "author": "lava081",
   "type": "module",
   "dependencies": {
+    "sqlite3": "5.0.0"
   },
   "imports": {
     "#Karin": "./lib/index.js"
