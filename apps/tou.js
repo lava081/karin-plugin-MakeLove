@@ -1,4 +1,4 @@
-import { segment, plugin } from '#Karin'
+import { segment, plugin, redis } from '#Karin'
 import Config from '../lib/config.js'
 import DB from '../lib/data.js'
 
@@ -103,14 +103,16 @@ export class FuckSomeone extends plugin {
   }
 
   async exercise (e) {
-    /** 当前时间 */
-    const time_now = new Date().getTime()
+    /** redis键名 */
+    const cooldown_key = `MakeLove:exercise:cooldown:${e.group_id}:${e.user_id}`
+    /** 检查冷却时间 */
+    const cooldown_value = await redis.get(cooldown_key)
+    if (cooldown_value) return await this.reply(`这么快就不行了啊，你的补品还没产好呢！\n预计需要 ${Math.floor((cooldown_value - Date.now()) / 1000)} 秒...`)
+    /** CD储存在redis中 */
+    redis.set(cooldown_key, Config.Config.cooldown * 1000 + Date.now(), { EX: Config.Config.cooldown })
     /** 随机增加100-600cal体力 */
     const energy_raise = Math.floor(Config.Config.energy_raise_min + Math.random() * (Config.Config.energy_raise_max - Config.Config.energy_raise_min))
     let user = await DB.getUser(e.group_id, e.user_id)
-    if (user.updatedAt.getTime() <= time_now && time_now - user.updatedAt.getTime() < Config.Config.cooldown * 1000) {
-      return await this.reply(`这么快就不行了啊，你的补品还没产好呢！\n预计需要${Config.Config.cooldown - Math.floor((time_now - user.updatedAt.getTime()) / 1000)}秒`)
-    }
     user.energy += energy_raise
     await user.save()
     await this.reply(`你吞下了神秘补品，体力恢复了${energy_raise}卡路里。\n还剩${user.energy}卡路里。`, { at: true, recallMsg: Config.Config.recall_delay })
