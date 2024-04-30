@@ -3,3 +3,14 @@ cooldown: 180
 
 # 被透榜显示人数
 rank: 10
+
+# 单次体力消耗
+energy_cost_min: 30
+energy_cost_max: 100
+
+# 补品体力恢复
+energy_raise_min: 100
+energy_raise_max: 600
+
+# 消息撤回延迟, 单位: 秒
+recall_delay: 0

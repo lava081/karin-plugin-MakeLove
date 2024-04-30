@@ -15,30 +15,69 @@ export class FuckSomeone extends plugin {
           fnc: 'fuckOne'
         },
         {
+          reg: /^#?透(群友|群主|管理)$/,
+          fnc: 'fuckRandom'
+        },
+        {
           reg: /^#?喝补品$/,
           fnc: 'exercise'
         },
         {
-          reg: /^#?淫荡指数$/,
+          reg: /^#?(我的)?淫荡(指数|值)$/,
           fnc: 'info'
         },
         {
-          reg: /^#?群淫荡榜$/,
+          reg: /^#?群?(淫荡|被透)[排行榜]*$/,
           fnc: 'rank'
         }
       ]
     })
   }
 
+  async fuckRandom (e) {
+    /** 当前机器人账号 */
+    const botAccount = e.bot.account.uid || e.bot.account.uin
+    /** 对象类型 */
+    const target_type = e.msg.match(/^#?透(群友|群主|管理)$/)[1]
+    /** 群成员列表 */
+    const gml = (await e.bot.GetGroupMemberList({ group_id: e.group_id }))
+    /** 排除机器人是群主 */
+    if (target_type === '群主' && gml.filter(v => (v.role === 'owner' && v.user_id === botAccount)).length) {
+      return await this.reply('那种事情，不可以！', { reply: true })
+    }
+    /** 筛选符合条件的群友 */
+    let target_users = []
+    switch (target_type) {
+      case '群友':
+        target_users.push(...gml.filter(v => (v.role === 'member' && v.user_id !== botAccount)))
+      // eslint-disable-next-line no-fallthrough
+      case '管理':
+        target_users.push(...gml.filter(v => v.role === 'admin' && v.user_id !== botAccount))
+      // eslint-disable-next-line no-fallthrough
+      case '群主':
+        target_users.push(...gml.filter(v => v.role === 'owner'))
+        break
+    }
+    if (!target_users.length) {
+      return await this.reply('你要透的人被提前拐走了，真是神奇的一幕')
+    }
+    e.at = [target_users[Math.floor(Math.random() * (target_users.length - 1))].user_id]
+    /** 递给fuckOne处理 */
+    this.fuckOne(e)
+  }
+
   async fuckOne (e) {
     /** 没有指定群友(包括仅@机器人和@全体成员) */
     if (!e.at.length) {
+      if (e.atBot) {
+        return await this.reply('那种事情，不要啊！', { reply: true })
+      }
       return await this.reply('不知道透谁？那就把屁股撅好准备挨透吧！')
     }
     /** 随机扣除30-100cal体力 */
-    const energy_cost = Math.floor(30 + Math.random() * 70)
+    const energy_cost = Math.floor(Config.Config.energy_cost_min + Math.random() * (Config.Config.energy_cost_max - Config.Config.energy_cost_min))
     /** 精液量倍数 */
-    const cum_rate = 0.05 * Math.floor(1 + Math.random() * 5)
+    const cum_rate = 0.05 * Math.floor(1 + Math.random() * 4)
     /** 增加的精液量 */
     const cum_raise = Math.floor(energy_cost * cum_rate)
     /** 获取双方信息(不存在则自动创建) */
@@ -46,7 +85,7 @@ export class FuckSomeone extends plugin {
     let target_user = await DB.getUser(e.group_id, e.at[0])
     /** 体力不足 */
     if (operator_user.energy < energy_cost) {
-      return await this.reply('杂鱼大叔，你已经是强弩之末啦！\n要我给你搞点补品喝喝吗？')
+      return await this.reply('杂鱼大叔，你已经是强弩之末啦！\n要我给你搞点补品喝喝吗？', { at: true, recallMsg: Config.Config.recall_delay })
     }
     /** 操作数据 */
     operator_user.energy -= energy_cost
@@ -56,25 +95,26 @@ export class FuckSomeone extends plugin {
     target_user.save()
     /** 发送消息 */
     await this.reply([
-      segment.text('你透了'),
+      segment.text('透了'),
       segment.at(e.at[0]),
+      segment.text(`${(cum_rate >= 0.2) ? '，打出了暴击！' : `${(cum_rate <= 0.05) ? '，就一滴也很满足~' : ''}`}`),
       segment.text(`\n${cum_raise}mL精液被喂给了他，小小的肚子里容纳了${target_user.cum}mL精液。\n你消耗了${energy_cost}卡路里，还剩${operator_user.energy}卡路里。`),
       segment.image(e.bot.getAvatarUrl(e.at[0], 100))
-    ])
+    ], { at: true, recallMsg: Config.Config.recall_delay })
   }
 
   async exercise (e) {
     /** 当前时间 */
     const time_now = new Date().getTime()
     /** 随机增加100-600cal体力 */
-    const energy_raise = Math.floor(100 + Math.random() * 500)
+    const energy_raise = Math.floor(Config.Config.energy_raise_min + Math.random() * (Config.Config.energy_raise_max - Config.Config.energy_raise_min))
     let user = await DB.getUser(e.group_id, e.user_id)
     if (user.updatedAt.getTime() <= time_now && time_now - user.updatedAt.getTime() < Config.Config.cooldown * 1000) {
       return await this.reply(`这么快就不行了啊，你的补品还没产好呢！\n预计需要${Config.Config.cooldown - Math.floor((time_now - user.updatedAt.getTime()) / 1000)}秒`)
     }
     user.energy += energy_raise
     await user.save()
-    await this.reply(`你吞下了神秘补品，体力恢复了${energy_raise}卡路里。\n还剩${user.energy}卡路里。`)
+    await this.reply(`你吞下了神秘补品，体力恢复了${energy_raise}卡路里。\n还剩${user.energy}卡路里。`, { at: true, recallMsg: Config.Config.recall_delay })
   }
 
   async info (e) {
@@ -96,7 +136,7 @@ export class FuckSomeone extends plugin {
       return `第${i + 1}名 ${groupMemberInfo.card || groupMemberInfo.nickname}(${v.user_id}) - ${v.cum}mL - ${v.cnt}次`
     }))
     await this.reply([
-      segment.text('群淫荡榜：\n'),
+      segment.text('群被透榜：\n'),
       segment.text(rank.join('\n'))
     ])
   }
