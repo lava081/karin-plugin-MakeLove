@@ -15,7 +15,7 @@ export class FuckSomeone extends plugin {
           fnc: 'fuckOne'
         },
         {
-          reg: /^#?透(群友|群主|管理)$/,
+          reg: /^#?透(群友|群主|管理(员)?)$/,
           fnc: 'fuckRandom'
         },
         {
@@ -38,7 +38,7 @@ export class FuckSomeone extends plugin {
     /** 当前机器人账号 */
     const botAccount = e.bot.account.uid || e.bot.account.uin
     /** 对象类型 */
-    const target_type = e.msg.match(/^#?透(群友|群主|管理)$/)[1]
+    const target_type = e.msg.match(/^#?透(群友|群主|管理(员)?)$/)[1]
     /** 群成员列表 */
     const gml = (await e.bot.GetGroupMemberList({ group_id: e.group_id }))
     /** 排除机器人是群主 */
@@ -52,6 +52,7 @@ export class FuckSomeone extends plugin {
         target_users.push(...gml.filter(v => (v.role === 'member' && v.user_id !== botAccount)))
       // eslint-disable-next-line no-fallthrough
       case '管理':
+      case '管理员':
         target_users.push(...gml.filter(v => v.role === 'admin' && v.user_id !== botAccount))
       // eslint-disable-next-line no-fallthrough
       case '群主':
@@ -93,12 +94,10 @@ export class FuckSomeone extends plugin {
     target_user.cnt++
     operator_user.save()
     target_user.save()
+    const target_info = await e.bot.GetGroupMemberInfo({ group_id: e.group_id, target_uin: e.at[0] })
     /** 发送消息 */
     await this.reply([
-      segment.text('透了'),
-      segment.at(e.at[0]),
-      segment.text(`${(cum_rate >= 0.2) ? '，打出了暴击！' : `${(cum_rate <= 0.05) ? '，就一滴也很满足~' : ''}`}`),
-      segment.text(`\n${cum_raise}mL精液被喂给了他，小小的肚子里容纳了${target_user.cum}mL精液。\n你消耗了${energy_cost}卡路里，还剩${operator_user.energy}卡路里。`),
+      segment.text(`透了『${target_info.card || target_info.nickname}』(${e.at[0]})${(cum_rate >= 0.2) ? '，打出了暴击！' : `${(cum_rate <= 0.05) ? '，就一滴也很满足~' : ''}`}\n${cum_raise}mL精液被喂给了他，小小的肚子里容纳了${target_user.cum}mL精液。\n你消耗了${energy_cost}卡路里，还剩${operator_user.energy}卡路里。`),
       segment.image(e.bot.getAvatarUrl(e.at[0], 100))
     ], { at: true, recallMsg: Config.Config.recall_delay })
   }
