@@ -19,7 +19,7 @@ export class FuckSomeone extends plugin {
           fnc: 'fuckRandom'
         },
         {
-          reg: /^#?喝补品$/,
+          reg: /^#?(喝补品|锻炼)$/,
           fnc: 'exercise'
         },
         {
