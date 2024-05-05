@@ -27,7 +27,7 @@ export class FuckSomeone extends plugin {
           fnc: 'info'
         },
         {
-          reg: /^#?群?(淫荡|被透)[排行榜]*$/,
+          reg: /^#?群?(被透|屯屯鼠|发射)[排行榜]*$/,
           fnc: 'rank'
         }
       ]
@@ -83,6 +83,7 @@ export class FuckSomeone extends plugin {
     const cum_raise = Math.floor(energy_cost * cum_rate)
     /** 获取双方信息(不存在则自动创建) */
     let operator_user = await DB.getUser(e.group_id, e.user_id)
+    let operator_user2 = await DB.getUser(e.group_id, e.user_id, true)
     let target_user = await DB.getUser(e.group_id, e.at[0])
     /** 体力不足 */
     if (operator_user.energy < energy_cost) {
@@ -94,6 +95,11 @@ export class FuckSomeone extends plugin {
     target_user.cnt++
     operator_user.save()
     target_user.save()
+    /** 操作数据2 */
+    operator_user2.energy += energy_cost
+    operator_user2.cum += Math.floor(energy_cost * cum_rate)
+    operator_user2.cnt++
+    operator_user2.save()
     const target_info = await e.bot.GetGroupMemberInfo({ group_id: e.group_id, target_uin: e.at[0] })
     /** 发送消息 */
     await this.reply([
@@ -120,24 +126,43 @@ export class FuckSomeone extends plugin {
 
   async info (e) {
     let user = await DB.getUser(e.group_id, e.at[0] || e.user_id)
+    let user2 = await DB.getUser(e.group_id, e.at[0] || e.user_id, true)
     await this.reply([
       segment.at(e.at[0] || e.user_id),
-      segment.text(`已经被透了${user.cnt}次，凸出的小腹中容纳着惊人的${user.cum}mL精液。真令人叹为观止！\n体力还剩${user.energy}卡路里。`)
+      segment.text(`\n已经被透了${user.cnt}次，凸出的小腹中容纳着${user.cum}mL精液。真令人叹为观止！\n体力还剩${user.energy}卡路里\n`),
+      segment.text(`\n透了其他人${user2.cnt}次，被榨出了${user2.cum}mL精液，要节制啊！\n消耗了${user.energy}卡路里`)
     ])
   }
 
   async rank (e) {
-    let users = await DB.User.findAll({
+    /** 表单 */
+    let user_type = 'User'
+    /** 排行依据 */
+    let rank_type = 'cum'
+    /** 排行类型 */
+    let keyword = e.msg.match(/^#?群?(被透|屯屯鼠|发射)[排行榜]*$/)[1]
+    switch (keyword) {
+      case '被透': rank_type = 'cum'; break
+      case '屯屯鼠': rank_type = 'energy'; break
+      case '发射': rank_type = 'cum'; user_type = 'User2'; break
+    }
+
+    let users = await DB[user_type].findAll({
       where: { group_id: e.group_id },
-      order: [['cum', 'DESC']],
+      order: [[rank_type, 'DESC']],
       limit: Config.Config.rank
     })
     let rank = await Promise.all(users.map(async (v, i) => {
-      const groupMemberInfo = (await e.bot.GetGroupMemberInfo({ group_id: e.group_id, target_uin: v.user_id }))
-      return `第${i + 1}名 ${groupMemberInfo.card || groupMemberInfo.nickname}(${v.user_id}) - ${v.cum}mL - ${v.cnt}次`
+      let groupMemberInfo
+      try {
+        groupMemberInfo = (await e.bot.GetGroupMemberInfo({ group_id: e.group_id, target_uin: v.user_id }))
+      } catch (error) {
+        groupMemberInfo = { nickname: v.user_id }
+      }
+      return `第${i + 1}名 ${groupMemberInfo.card || groupMemberInfo.nickname}(${v.user_id})\n - ${(user_type === 'User' ? '被透' : '发射')}${v.cum}mL - ${v.cnt}次 - 共${(user_type === 'User' ? '剩余' : '消耗')}${v.energy}cal`
     }))
     await this.reply([
-      segment.text('群被透榜：\n'),
+      segment.text(`群${keyword}榜：\n`),
       segment.text(rank.join('\n'))
     ])
   }
